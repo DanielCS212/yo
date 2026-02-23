@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galactic War - Menu Edition</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #fff;
+            font-family: 'Arial Black', sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            border: 3px solid #00f2ff;
+            box-shadow: 0 0 25px #00f2ff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // --- ASSETS ---
+        const bgImg = new Image(); bgImg.src = 'background.jpg';
+        const playerImg = new Image(); playerImg.src = 'pesawat.jpg';
+        const ufoImg = new Image(); ufoImg.src = 'ufo.jpg';
+
+        // --- GAME STATES ---
+        const STATE_START = 0;
+        const STATE_PLAYING = 1;
+        const STATE_GAMEOVER = 2;
+        let currentState = STATE_START;
+
+        // --- VARIABLES ---
+        let score = 0;
+        let lives = 3;
+        let bgX = 0;
+        let player = { x: 50, y: 200, w: 70, h: 50 };
+        let bullets = [];
+        let enemies = [];
+        let particles = [];
+
+        // --- CONTROLS ---
+        canvas.addEventListener('mousemove', (e) => {
+            if (currentState === STATE_PLAYING) {
+                const rect = canvas.getBoundingClientRect();
+                player.y = e.clientY - rect.top - player.h / 2;
+            }
+        });
+
+        canvas.addEventListener('mousedown', () => {
+            if (currentState === STATE_START) {
+                resetGame();
+                currentState = STATE_PLAYING;
+            } else if (currentState === STATE_PLAYING) {
+                bullets.push({ x: player.x + player.w, y: player.y + player.h / 2, r: 4, speed: 12 });
+            } else if (currentState === STATE_GAMEOVER) {
+                currentState = STATE_START;
+            }
+        });
+
+        function resetGame() {
+            score = 0;
+            lives = 3;
+            bullets = [];
+            enemies = [];
+            particles = [];
+            player.y = 200;
+        }
+
+        function createEnemy() {
+            if (Math.random() < 0.03) {
+                enemies.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - 50),
+                    w: 60, h: 45,
+                    speed: 3 + (score / 1500)
+                });
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x, y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, alpha: 1, color
+                });
+            }
+        }
+
+        function update() {
+            if (currentState !== STATE_PLAYING) return;
+
+            bgX -= 1; 
+            if (bgX <= -canvas.width) bgX = 0;
+
+            createEnemy();
+
+            bullets.forEach((b, bi) => {
+                b.x += b.speed;
+                if (b.x > canvas.width) bullets.splice(bi, 1);
+            });
+
+            enemies.forEach((e, ei) => {
+                e.x -= e.speed;
+                // Collision Player
+                if (e.x < player.x + player.w - 10 && e.x + e.w > player.x + 10 && 
+                    e.y < player.y + player.h - 10 && e.y + e.h > player.y + 10) {
+                    enemies.splice(ei, 1);
+                    lives--;
+                    createExplosion(player.x + 30, player.y + 20, '#ff0000');
+                    if (lives <= 0) currentState = STATE_GAMEOVER;
+                }
+                // Collision Bullets
+                bullets.forEach((b, bi) => {
+                    if (b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
+                        createExplosion(e.x + e.w/2, e.y + e.h/2, '#00f2ff');
+                        enemies.splice(ei, 1);
+                        bullets.splice(bi, 1);
+                        score += 100;
+                    }
+                });
+                if (e.x + e.w < 0) enemies.splice(ei, 1);
+            });
+
+            particles.forEach((p, pi) => {
+                p.x += p.vx; p.y += p.vy; p.alpha -= 0.03;
+                if (p.alpha <= 0) particles.splice(pi, 1);
+            });
+        }
+
+        function draw() {
+            // Draw Background
+            ctx.drawImage(bgImg, bgX, 0, canvas.width, canvas.height);
+            ctx.drawImage(bgImg, bgX + canvas.width, 0, canvas.width, canvas.height);
+
+            if (currentState === STATE_START) {
+                // MENU AWAL
+                ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#00f2ff";
+                ctx.textAlign = "center";
+                ctx.font = "60px Arial Black";
+                ctx.fillText("GALACTIC WAR", canvas.width / 2, canvas.height / 2 - 20);
+                ctx.font = "25px Arial";
+                ctx.fillStyle = "#fff";
+                ctx.fillText("KLIK UNTUK PLAY GAME", canvas.width / 2, canvas.height / 2 + 40);
+            } 
+            
+            else if (currentState === STATE_PLAYING) {
+                // GAMEPLAY
+                ctx.drawImage(playerImg, player.x, player.y, player.w, player.h);
+                enemies.forEach(e => ctx.drawImage(ufoImg, e.x, e.y, e.w, e.h));
+                bullets.forEach(b => {
+                    ctx.fillStyle = "#fff";
+                    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+                });
+                particles.forEach(p => {
+                    ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill();
+                });
+                ctx.globalAlpha = 1;
+
+                // Score & Lives UI
+                ctx.fillStyle = "#fff";
+                ctx.textAlign = "left";
+                ctx.font = "20px Arial";
+                ctx.fillText(`SCORE: ${score}`, 20, 30);
+                ctx.fillText(`LIVES: ${lives}`, 20, 60);
+            } 
+            
+            else if (currentState === STATE_GAMEOVER) {
+                // LAYAR GAME OVER
+                ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#ff0055";
+                ctx.textAlign = "center";
+                ctx.font = "70px Arial Black";
+                ctx.fillText("YOU GAME OVER", canvas.width / 2, canvas.height / 2);
+                ctx.fillStyle = "#fff";
+                ctx.font = "25px Arial";
+                ctx.fillText(`SKOR AKHIR: ${score}`, canvas.width / 2, canvas.height / 2 + 60);
+                ctx.fillText("KLIK DIMANA SAJA UNTUK MENGULANG", canvas.width / 2, canvas.height / 2 + 100);
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        bgImg.onload = () => loop();
+    </script>
+</body>
+</html>
